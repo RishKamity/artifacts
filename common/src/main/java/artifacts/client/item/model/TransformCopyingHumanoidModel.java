@@ -5,6 +5,7 @@ import net.minecraft.client.model.HumanoidModel;
 import net.minecraft.client.model.Model;
 import net.minecraft.client.model.geom.ModelPart;
 import net.minecraft.client.model.geom.PartNames;
+import net.minecraft.client.model.geom.PartPose;
 import net.minecraft.client.renderer.entity.state.HumanoidRenderState;
 import org.joml.Matrix4f;
 import org.joml.Quaternionf;
@@ -96,10 +97,16 @@ public final class TransformCopyingHumanoidModel<S extends HumanoidRenderState> 
                 return of(part);
             }
 
+            ModelPart emfPart = part.getChild(emfName);
+
             PoseStack poseStack = new PoseStack();
             part.translateAndRotate(poseStack);
-            part.getChild(emfName).translateAndRotate(poseStack);
+            emfPart.translateAndRotate(poseStack);
             Matrix4f matrix = poseStack.last().pose();
+            // EMF bones have their own rest pivot (taken from the model file), which usually differs from
+            // the vanilla part's pivot. Only apply the bone's movement relative to its rest pose, so that
+            // artifacts, which are modelled around the vanilla pivot, keep their vanilla position at rest.
+            matrix.mul(poseMatrix(emfPart.getInitialPose()).invert());
 
             Vector3f translation = matrix.getTranslation(new Vector3f());
             Vector3f scale = matrix.getScale(new Vector3f());
@@ -111,6 +118,16 @@ public final class TransformCopyingHumanoidModel<S extends HumanoidRenderState> 
                     rotation.x, rotation.y, rotation.z,
                     scale.x, scale.y, scale.z
             );
+        }
+
+        /**
+         * Builds the same transform {@link ModelPart#translateAndRotate} applies for the given pose.
+         */
+        private static Matrix4f poseMatrix(PartPose pose) {
+            return new Matrix4f()
+                    .translation(pose.x() / 16.0F, pose.y() / 16.0F, pose.z() / 16.0F)
+                    .rotate(new Quaternionf().rotationZYX(pose.zRot(), pose.yRot(), pose.xRot()))
+                    .scale(pose.xScale(), pose.yScale(), pose.zScale());
         }
 
         private void applyTo(ModelPart delegate) {
