@@ -2,11 +2,15 @@ name: Build
 
 on:
   push:
+    branches-ignore:
+      - builds
   workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     timeout-minutes: 60
     steps:
       - name: Check out code
@@ -41,3 +45,17 @@ jobs:
             !fabric/build/libs/*-dev*.jar
             !fabric/build/libs/*-shadow*.jar
           if-no-files-found: error
+
+      # Also keep the latest mod jar on a separate "builds" branch
+      - name: Publish jar to builds branch
+        run: |
+          mkdir -p "$RUNNER_TEMP/out"
+          find fabric/build/libs -maxdepth 1 -name '*.jar' \
+            ! -name '*-sources.jar' ! -name '*-javadoc.jar' ! -name '*-dev*' ! -name '*-shadow*' \
+            -exec cp {} "$RUNNER_TEMP/out/" \;
+          cd "$RUNNER_TEMP/out"
+          git init -q -b builds
+          git add -- *.jar
+          git -c user.name="github-actions" -c user.email="github-actions@users.noreply.github.com" \
+            commit -q -m "Build of ${GITHUB_REF_NAME} at ${GITHUB_SHA::7}"
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git" builds
