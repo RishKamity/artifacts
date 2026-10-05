@@ -1,0 +1,43 @@
+name: Build
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build Fabric jar
+        run: |
+          chmod +x gradlew
+          ./gradlew :fabric:build --stacktrace
+
+      - name: List built jars
+        run: ls -la fabric/build/libs
+
+      # Only the mod jar goes in the mods folder; skip sources, javadoc and dev jars
+      - name: Upload Fabric jar
+        uses: actions/upload-artifact@v4
+        with:
+          name: artifacts-fabric-1.21.11
+          path: |
+            fabric/build/libs/*.jar
+            !fabric/build/libs/*-sources.jar
+            !fabric/build/libs/*-javadoc.jar
+            !fabric/build/libs/*-dev*.jar
+            !fabric/build/libs/*-shadow*.jar
+          if-no-files-found: error
